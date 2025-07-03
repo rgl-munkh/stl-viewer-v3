@@ -6,6 +6,7 @@ import { useRef, useState } from "react";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { supabase } from "@/lib/supabase";
 import * as THREE from "three";
+import { useRouter } from "next/navigation";
 
 function STLMesh({ geometry }: { geometry: THREE.BufferGeometry | null }) {
   if (!geometry) return null;
@@ -17,6 +18,7 @@ function STLMesh({ geometry }: { geometry: THREE.BufferGeometry | null }) {
 }
 
 const Page = () => {
+  const router = useRouter();
   const [geometry, setGeometry] = useState<THREE.BufferGeometry | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -60,7 +62,7 @@ const Page = () => {
     if (error) {
       alert("Upload failed: " + error.message);
     } else {
-      alert("Saved successfully!");
+      router.push(`/place-origin-and-cut?file=${file.name}`);
     }
   };
 

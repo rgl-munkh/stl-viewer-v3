@@ -240,6 +240,9 @@ export default function PlaceOriginAndCutPage() {
             onMouseDown={() => setIsDragging(true)}
             onMouseUp={() => setIsDragging(false)}
             object={xPlaneRef.current}
+            showX={true}
+            showY={false}
+            showZ={false}
           />
         )}
 

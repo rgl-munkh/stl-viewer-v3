@@ -11,6 +11,7 @@
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
         "three": "^0.178.0",
+        "three-csg-ts": "^3.2.0",
       },
       "devDependencies": {
         "@eslint/eslintrc": "^3",
@@ -860,6 +861,8 @@
     "tar": ["tar@7.4.3", "", { "dependencies": { "@isaacs/fs-minipass": "^4.0.0", "chownr": "^3.0.0", "minipass": "^7.1.2", "minizlib": "^3.0.1", "mkdirp": "^3.0.1", "yallist": "^5.0.0" } }, "sha512-5S7Va8hKfV7W5U6g3aYxXmlPoZVAwUMy9AOKyF2fVuZa2UD3qZjg578OrLRt8PcNN1PleVaL/5/yYATNL0ICUw=="],
 
     "three": ["three@0.178.0", "", {}, "sha512-ybFIB0+x8mz0wnZgSGy2MO/WCO6xZhQSZnmfytSPyNpM0sBafGRVhdaj+erYh5U+RhQOAg/eXqw5uVDiM2BjhQ=="],
+
+    "three-csg-ts": ["three-csg-ts@3.2.0", "", { "peerDependencies": { "@types/three": ">= 0.154.0", "three": ">= 0.154.0" } }, "sha512-oTYg8kdal6qgHDbso/6VzA12Udf2ic2uXhf0XlJzuSP+Gs0OUR5gTHSZ7GotAE+M/QcVlw41eOwiWZVnJG5/8w=="],
 
     "three-mesh-bvh": ["three-mesh-bvh@0.8.3", "", { "peerDependencies": { "three": ">= 0.159.0" } }, "sha512-4G5lBaF+g2auKX3P0yqx+MJC6oVt6sB5k+CchS6Ob0qvH0YIhuUk1eYr7ktsIpY+albCqE80/FVQGV190PmiAg=="],
 

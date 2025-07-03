@@ -62,7 +62,7 @@ const Page = () => {
     if (error) {
       alert("Upload failed: " + error.message);
     } else {
-      router.push(`/place-origin-and-cut?file=${file.name}`);
+      router.push(`/place-origin?file=${file.name}`);
     }
   };
 

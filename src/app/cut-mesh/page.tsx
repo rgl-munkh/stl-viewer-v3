@@ -21,13 +21,10 @@ export default function PlaceOriginAndCutPage() {
   );
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [showCuttingPreview, setShowCuttingPreview] = useState(false);
-  const [cutSide, setCutSide] = useState<"positive" | "negative">("positive");
 
   const meshRef = useRef<THREE.Mesh>(null);
-  const planeRef = useRef<THREE.Mesh>(null);
-  const arrowHelperRef = useRef<THREE.ArrowHelper>(null);
-  const cuttingBoxRef = useRef<THREE.Mesh>(null);
+  const xPlaneRef = useRef<THREE.Mesh>(null);
+  const yPlaneRef = useRef<THREE.Mesh>(null);
 
   const searchParams = useSearchParams();
   const fileName = searchParams.get("file");
@@ -72,46 +69,13 @@ export default function PlaceOriginAndCutPage() {
     fetchAndParseSTL();
   }, [fileName]);
 
-  // Update cutting preview when plane moves
-  useEffect(() => {
-    if (showCuttingPreview && planeRef.current && cuttingBoxRef.current) {
-      updateCuttingPreview();
-    }
-  }, [showCuttingPreview]);
-
-  const updateCuttingPreview = () => {
-    if (!planeRef.current || !cuttingBoxRef.current) return;
-
-    const plane = planeRef.current;
-    const box = cuttingBoxRef.current;
-
-    // Get plane's world position and normal
-    const planePosition = new THREE.Vector3();
-    const planeNormal = new THREE.Vector3(0, 0, 1);
-
-    plane.getWorldPosition(planePosition);
-    planeNormal.applyMatrix4(plane.matrixWorld).normalize();
-
-    // Position cutting box
-    const offset = cutSide === "positive" ? 500 : -500;
-    const boxPosition = planePosition
-      .clone()
-      .add(planeNormal.clone().multiplyScalar(offset));
-
-    box.position.copy(boxPosition);
-    box.lookAt(planePosition.clone().add(planeNormal));
-
-    // Update arrow helper
-    if (arrowHelperRef.current) {
-      arrowHelperRef.current.position.copy(planePosition);
-      arrowHelperRef.current.setDirection(planeNormal);
-    }
-  };
-
-
-
   const cutMesh = async () => {
-    if (!meshRef.current || !planeRef.current || !geometry) {
+    if (
+      !meshRef.current ||
+      !xPlaneRef.current ||
+      !yPlaneRef.current ||
+      !geometry
+    ) {
       alert("Missing required components for cutting");
       return;
     }
@@ -119,46 +83,44 @@ export default function PlaceOriginAndCutPage() {
     setIsProcessing(true);
 
     try {
-      // Small delay to show loading state
       await new Promise((resolve) => setTimeout(resolve, 100));
 
-      // Get plane's world position and normal
-      const planePosition = new THREE.Vector3();
-      const planeNormal = new THREE.Vector3(0, 0, 1);
-
-      planeRef.current.getWorldPosition(planePosition);
-      planeNormal.applyMatrix4(planeRef.current.matrixWorld).normalize();
-
-      // Create cutting box (half-space)
-      const size = 2000; // Large enough to encompass entire mesh
-      const cutterGeo = new THREE.BoxGeometry(size, size, size);
-      const cutterMat = new THREE.MeshStandardMaterial({ color: "red" });
-      const cutterMesh = new THREE.Mesh(cutterGeo, cutterMat);
-
-      // Position the cutting box
-      const offset = cutSide === "positive" ? size / 2 : -size / 2;
-      const cutterPosition = planePosition
-        .clone()
-        .add(planeNormal.clone().multiplyScalar(offset));
-
-      cutterMesh.position.copy(cutterPosition);
-      cutterMesh.lookAt(planePosition.clone().add(planeNormal));
-
-      // Create a copy of the original mesh with world transform applied
       const meshCopy = new THREE.Mesh(
         geometry.clone(),
         new THREE.MeshStandardMaterial()
       );
       meshCopy.applyMatrix4(meshRef.current.matrixWorld.clone());
+      let resultCSG = CSG.fromMesh(meshCopy);
 
-      // Convert both to CSG
-      const targetCSG = CSG.fromMesh(meshCopy);
-      const cutterCSG = CSG.fromMesh(cutterMesh);
+      const cutWithPlane = (
+        planeRef: React.RefObject<THREE.Mesh | null>,
+        normal: THREE.Vector3
+      ) => {
+        const position = new THREE.Vector3();
+        const planeNormal = normal.clone();
+        planeRef.current!.getWorldPosition(position);
+        planeNormal.applyMatrix4(planeRef.current!.matrixWorld).normalize();
 
-      // Perform CSG operation
-      const resultCSG = targetCSG.subtract(cutterCSG);
+        const size = 2000;
+        const cutter = new THREE.Mesh(
+          new THREE.BoxGeometry(size, size, size),
+          new THREE.MeshStandardMaterial()
+        );
 
-      // Convert back to mesh
+        const offset = size / 2;
+        const cutterPosition = position
+          .clone()
+          .add(planeNormal.clone().multiplyScalar(offset));
+        cutter.position.copy(cutterPosition);
+        cutter.lookAt(position.clone().add(planeNormal));
+
+        const cutterCSG = CSG.fromMesh(cutter);
+        resultCSG = resultCSG.subtract(cutterCSG);
+      };
+
+      cutWithPlane(xPlaneRef, new THREE.Vector3(0, 0, 1));
+      cutWithPlane(yPlaneRef, new THREE.Vector3(0, 1, 0));
+
       const resultMesh = resultCSG.toMesh(
         meshRef.current.matrix,
         meshRef.current.material
@@ -166,19 +128,11 @@ export default function PlaceOriginAndCutPage() {
       resultMesh.geometry.computeVertexNormals();
       resultMesh.geometry.computeBoundingBox();
 
-      const newGeo = resultMesh.geometry;
-
-      // Cleanup old geometry
       geometry.dispose();
       meshCopy.geometry.dispose();
       meshCopy.material.dispose();
-      cutterGeo.dispose();
-      cutterMat.dispose();
 
-      // Update geometry
-      setGeometry(newGeo);
-
-      // Reset mesh transform since the result is positioned correctly
+      setGeometry(resultMesh.geometry);
       meshRef.current.position.set(0, 0, 0);
       meshRef.current.rotation.set(0, 0, 0);
       meshRef.current.scale.set(1, 1, 1);
@@ -194,11 +148,8 @@ export default function PlaceOriginAndCutPage() {
     }
   };
 
-
-
   return (
     <div className="w-full h-[calc(100vh-120px)] border border-gray-300 rounded mt-4">
-      {/* Control Panel */}
       <div className="p-4 border-b border-gray-200">
         <div className="flex flex-wrap gap-2 mb-4">
           <div className="flex gap-2">
@@ -230,28 +181,6 @@ export default function PlaceOriginAndCutPage() {
 
           <div className="flex gap-2">
             <button
-              onClick={() => setShowCuttingPreview(!showCuttingPreview)}
-              className={`px-3 py-1 rounded ${
-                showCuttingPreview ? "bg-green-500 text-white" : "bg-gray-200"
-              }`}
-            >
-              Preview Cut
-            </button>
-
-            <select
-              value={cutSide}
-              onChange={(e) =>
-                setCutSide(e.target.value as "positive" | "negative")
-              }
-              className="px-3 py-1 rounded border"
-            >
-              <option value="positive">Cut Positive Side</option>
-              <option value="negative">Cut Negative Side</option>
-            </select>
-          </div>
-
-          <div className="flex gap-2">
-            <button
               onClick={cutMesh}
               disabled={isProcessing}
               className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 disabled:bg-gray-400"
@@ -268,7 +197,6 @@ export default function PlaceOriginAndCutPage() {
         )}
       </div>
 
-      {/* 3D Canvas */}
       <Canvas camera={{ position: [50, 50, 100], fov: 60 }}>
         <ambientLight intensity={0.4} />
         <pointLight position={[10, 10, 10]} intensity={0.8} />
@@ -276,69 +204,54 @@ export default function PlaceOriginAndCutPage() {
 
         <OrbitControls enabled={!isDragging} />
 
-        {/* Cutting Plane with TransformControls */}
-        <TransformControls
-          mode={mode}
-          onMouseDown={() => setIsDragging(true)}
-          onMouseUp={() => setIsDragging(false)}
-          onObjectChange={updateCuttingPreview}
-        >
-          <mesh ref={planeRef} position={[0, 0, 0]} rotation={[0, 0, 0]}>
-            <planeGeometry args={[200, 200]} />
-            <meshStandardMaterial
-              color="orange"
-              transparent
-              opacity={0.6}
-              side={THREE.DoubleSide}
-            />
-          </mesh>
-        </TransformControls>
-
-        {/* STL Mesh with TransformControls */}
         {geometry && (
+          <mesh ref={meshRef} geometry={geometry}>
+            <meshStandardMaterial color="#4f46e5" wireframe={false} />
+          </mesh>
+        )}
+
+        <mesh ref={xPlaneRef} position={[0, 0, -100]} rotation={[0, 0, 0]}>
+          <planeGeometry args={[200, 200]} />
+          <meshStandardMaterial
+            color="red"
+            transparent
+            opacity={0.6}
+            side={THREE.DoubleSide}
+          />
+        </mesh>
+
+        <mesh
+          ref={yPlaneRef}
+          position={[0, 200, 0]}
+          rotation={[Math.PI / 2, 0, 0]}
+        >
+          <planeGeometry args={[200, 200]} />
+          <meshStandardMaterial
+            color="green"
+            transparent
+            opacity={0.6}
+            side={THREE.DoubleSide}
+          />
+        </mesh>
+
+        {xPlaneRef.current && (
           <TransformControls
             mode={mode}
             onMouseDown={() => setIsDragging(true)}
             onMouseUp={() => setIsDragging(false)}
-          >
-            <mesh ref={meshRef} geometry={geometry}>
-              <meshStandardMaterial
-                color="#4f46e5"
-                wireframe={false}
-                transparent={showCuttingPreview}
-                opacity={showCuttingPreview ? 0.7 : 1.0}
-              />
-            </mesh>
-          </TransformControls>
-        )}
-
-        {/* Cutting Preview Box */}
-        {showCuttingPreview && (
-          <mesh ref={cuttingBoxRef}>
-            <boxGeometry args={[1000, 1000, 1000]} />
-            <meshStandardMaterial
-              color="red"
-              transparent
-              opacity={0.2}
-              wireframe={true}
-            />
-          </mesh>
-        )}
-
-        {/* Plane Normal Arrow */}
-        {planeRef.current && (
-          <arrowHelper
-            ref={arrowHelperRef}
-            args={[
-              new THREE.Vector3(0, 0, 1), // direction
-              new THREE.Vector3(0, 0, 0), // origin
-              50, // length
-              0x00ff00, // color
-            ]}
+            object={xPlaneRef.current}
           />
         )}
 
-        {/* Scene helpers */}
+        {yPlaneRef.current && (
+          <TransformControls
+            mode={mode}
+            onMouseDown={() => setIsDragging(true)}
+            onMouseUp={() => setIsDragging(false)}
+            object={yPlaneRef.current}
+          />
+        )}
+
         <axesHelper args={[200]} />
         <gridHelper args={[1000, 100]} />
 

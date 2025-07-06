@@ -1,103 +1,96 @@
-import Image from "next/image";
+'use client'
+
+import Link from "next/link"
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { useRouter } from "next/navigation";
+
+const CreatePatient = () => {
+  return (
+    <button className="bg-blue-500 text-white p-2 rounded-md cursor-pointer">
+      <Link href="/create-patient">
+        Create patient
+      </Link>
+    </button>
+  )
+}
+
+type Patient = {
+  id: number;
+  name: string;
+  age: number;
+  models: { "stl-origin": string, "stl-transformed": string };
+};
+
+const ListPatients = () => {
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const router = useRouter();
+
+  useEffect(() => {
+    const fetchPatients = async () => {
+      setLoading(true);
+      const { data, error } = await supabase.from("patients").select();
+      if (!error && data) {
+        setPatients(data as Patient[]);
+      }
+      setLoading(false);
+    };
+    fetchPatients();
+  }, []);
+
+  if (loading) return <div>Loading patients...</div>;
+  if (patients.length === 0) return <div>No patients found.</div>;
+
+
+  return (
+    <div className="mt-8">
+      <h2 className="text-xl font-semibold mb-2">Patients List</h2>
+      <table className="min-w-full border">
+        <thead>
+          <tr>
+            <th className="border px-2 py-1">ID</th>
+            <th className="border px-2 py-1">Name</th>
+            <th className="border px-2 py-1">Age</th>
+            <th className="border px-2 py-1">Edit</th>
+          </tr>
+        </thead>
+        <tbody>
+          {patients.map((p) => {
+            const stlUrl = p.models["stl-origin"];
+            return (
+              <tr key={p.id}>
+                <td className="border px-2 py-1">{p.id}</td>
+                <td className="border px-2 py-1">{p.name}</td>
+                <td className="border px-2 py-1">{p.age}</td>
+                <td className="border px-2 py-1 space-x-2">
+                  <button
+                    className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 cursor-pointer"
+                    onClick={() => router.push(`/place-origin?file=${encodeURIComponent(p.models["stl-origin"])}&id=${p.id}`)}
+                  >
+                    Place origin
+                  </button>
+                  <button
+                    className="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600 cursor-pointer"
+                    onClick={() => router.push(`/cut-mesh?file=${encodeURIComponent(p.models["stl-transformed"])}&id=${p.id}`)}
+                  >
+                    Cut mesh
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+};
 
 export default function Home() {
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
-  );
+    <main className="p-10">
+      <CreatePatient />
+      <ListPatients />
+    </main>
+  )
 }

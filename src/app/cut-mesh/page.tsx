@@ -1,8 +1,8 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
-import { Canvas } from "@react-three/fiber";
+import { useSearchParams, useRouter } from "next/navigation";
+import { Canvas, useLoader } from "@react-three/fiber";
 import {
   OrbitControls,
   GizmoHelper,
@@ -10,64 +10,52 @@ import {
   TransformControls,
 } from "@react-three/drei";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
+import { STLExporter } from "three/examples/jsm/Addons.js";
 import { supabase } from "@/lib/supabase";
 import * as THREE from "three";
 import { CSG } from "three-csg-ts";
+import { uploadToSupabase } from "@/lib/filemanager";
 
 export default function PlaceOriginAndCutPage() {
-  const [geometry, setGeometry] = useState<THREE.BufferGeometry | null>(null);
   const [mode, setMode] = useState<"translate" | "rotate" | "scale">(
     "translate"
   );
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-
+  const [geometry, setGeometry] = useState<THREE.BufferGeometry | null>(null);
   const meshRef = useRef<THREE.Mesh>(null);
   const xPlaneRef = useRef<THREE.Mesh>(null);
   const yPlaneRef = useRef<THREE.Mesh>(null);
 
   const searchParams = useSearchParams();
-  const fileName = searchParams.get("file");
+  const patientId = searchParams.get("id");
+  const stlUrl = searchParams.get("file");
+  
+  // Extract file name from URL
+  const fileName = stlUrl ? stlUrl.split("/").pop() : null;
 
   useEffect(() => {
-    if (!fileName) return;
-
-    const fetchAndParseSTL = async () => {
+    if (!stlUrl) return;
+    const loadSTL = async () => {
       try {
-        // 1. Get signed URL from Supabase
-        const { data, error } = await supabase.storage
-          .from(process.env.NEXT_PUBLIC_BUCKET_NAME!)
-          .createSignedUrl(`/${fileName}`, 60);
-
-        if (error || !data?.signedUrl) {
-          alert("Could not get signed URL for file.");
-          return;
-        }
-        const signedUrl = data.signedUrl;
-
-        // 2. Fetch the file as a Blob
-        const response = await fetch(signedUrl);
+        const response = await fetch(stlUrl);
         if (!response.ok) {
           alert("Failed to fetch STL file: " + response.statusText);
           return;
         }
         const arrayBuffer = await response.arrayBuffer();
-
-        // 3. Parse as STL and set geometry
         const loader = new STLLoader();
         const geo = loader.parse(arrayBuffer);
         geo.computeVertexNormals();
         geo.computeBoundingBox();
-
         setGeometry(geo.clone());
       } catch (error) {
         console.error("Error loading STL file:", error);
         alert("Error loading STL file: " + (error as Error).message);
       }
     };
-
-    fetchAndParseSTL();
-  }, [fileName]);
+    loadSTL();
+  }, [stlUrl]);
 
   const cutMesh = async () => {
     if (
@@ -83,8 +71,6 @@ export default function PlaceOriginAndCutPage() {
     setIsProcessing(true);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
       const meshCopy = new THREE.Mesh(
         geometry.clone(),
         new THREE.MeshStandardMaterial()
@@ -128,14 +114,20 @@ export default function PlaceOriginAndCutPage() {
       resultMesh.geometry.computeVertexNormals();
       resultMesh.geometry.computeBoundingBox();
 
+      // Update the geometry state with the result
+      setGeometry(resultMesh.geometry.clone());
+
+      // Clean up old geometry
       geometry.dispose();
       meshCopy.geometry.dispose();
       meshCopy.material.dispose();
 
-      setGeometry(resultMesh.geometry);
-      meshRef.current.position.set(0, 0, 0);
-      meshRef.current.rotation.set(0, 0, 0);
-      meshRef.current.scale.set(1, 1, 1);
+      // Reset mesh transform
+      if (meshRef.current) {
+        meshRef.current.position.set(0, 0, 0);
+        meshRef.current.rotation.set(0, 0, 0);
+        meshRef.current.scale.set(1, 1, 1);
+      }
 
       console.log("Cut operation completed successfully");
     } catch (error) {
@@ -148,6 +140,54 @@ export default function PlaceOriginAndCutPage() {
     }
   };
 
+  const saveCutMesh = async () => {
+    if (!meshRef.current || !geometry || !patientId) {
+      alert("No mesh, file, or patient id");
+      return;
+    }
+    try {
+      // Export mesh as STL
+      const exporter = new STLExporter();
+      const mesh = new THREE.Mesh(meshRef.current.geometry.clone());
+      const stlString = exporter.parse(mesh);
+      const cutFileName = fileName ? `cut_${fileName}` : `cut_mesh}.stl`;
+      const file = new File([stlString], cutFileName, { type: "application/sla" });
+
+      // Upload to Supabase
+      const filePath = `${patientId}/${file.name}`;
+      const response = await uploadToSupabase(file, filePath);
+
+      // Fetch current models
+      const { data: patientData, error: fetchError } = await supabase
+        .from("patients")
+        .select("models")
+        .eq("id", patientId)
+        .single();
+
+      if (fetchError) {
+        alert("Failed to fetch patient data: " + fetchError.message);
+        return;
+      }
+
+      if (response.error) {
+        alert("Failed to upload cut mesh: " + response.error.message);
+        return;
+      }
+
+      const { error: updateError } = await supabase
+        .from("patients")
+        .update({ models: { ...patientData?.models, "stl-cut": response.publicUrl } })
+        .eq("id", patientId);
+      if (updateError) {
+        alert("Cut mesh saved, but failed to update patient: " + updateError.message);
+      } else {
+        alert("Cut mesh saved and patient updated successfully!");
+      }
+    } catch (error) {
+      alert("Error saving cut mesh: " + (error as Error).message);
+    }
+  };
+
   return (
     <div className="w-full h-[calc(100vh-120px)] border border-gray-300 rounded mt-4">
       <div className="p-4 border-b border-gray-200">
@@ -155,25 +195,22 @@ export default function PlaceOriginAndCutPage() {
           <div className="flex gap-2">
             <button
               onClick={() => setMode("translate")}
-              className={`px-3 py-1 rounded ${
-                mode === "translate" ? "bg-blue-500 text-white" : "bg-gray-200"
-              }`}
+              className={`px-3 py-1 rounded ${mode === "translate" ? "bg-blue-500 text-white" : "bg-gray-200"
+                }`}
             >
               Move
             </button>
             <button
               onClick={() => setMode("rotate")}
-              className={`px-3 py-1 rounded ${
-                mode === "rotate" ? "bg-blue-500 text-white" : "bg-gray-200"
-              }`}
+              className={`px-3 py-1 rounded ${mode === "rotate" ? "bg-blue-500 text-white" : "bg-gray-200"
+                }`}
             >
               Rotate
             </button>
             <button
               onClick={() => setMode("scale")}
-              className={`px-3 py-1 rounded ${
-                mode === "scale" ? "bg-blue-500 text-white" : "bg-gray-200"
-              }`}
+              className={`px-3 py-1 rounded ${mode === "scale" ? "bg-blue-500 text-white" : "bg-gray-200"
+                }`}
             >
               Scale
             </button>
@@ -186,6 +223,12 @@ export default function PlaceOriginAndCutPage() {
               className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 disabled:bg-gray-400"
             >
               {isProcessing ? "Cutting..." : "Cut Mesh"}
+            </button>
+            <button
+              onClick={saveCutMesh}
+              className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
+            >
+              Save
             </button>
           </div>
         </div>
@@ -240,9 +283,9 @@ export default function PlaceOriginAndCutPage() {
             onMouseDown={() => setIsDragging(true)}
             onMouseUp={() => setIsDragging(false)}
             object={xPlaneRef.current}
-            showX={true}
+            showX={false}
             showY={false}
-            showZ={false}
+            showZ={true}
           />
         )}
 

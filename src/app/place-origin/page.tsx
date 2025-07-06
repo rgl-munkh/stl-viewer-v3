@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useLoader } from "@react-three/fiber";
 import {
   OrbitControls,
   GizmoHelper,
@@ -12,57 +12,51 @@ import {
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { supabase } from "@/lib/supabase";
 import * as THREE from "three";
+import { STLExporter } from "three/examples/jsm/Addons.js";
+import { uploadToSupabase } from "@/lib/filemanager";
+import { Suspense } from "react";
 
 export default function PlaceOriginPage() {
-  const router = useRouter();
   const [geometry, setGeometry] = useState<THREE.BufferGeometry | null>(null);
-  const [mode, setMode] = useState<"translate" | "rotate" | "scale">(
-    "translate"
-  );
+  const [mode, setMode] = useState<"translate" | "rotate" | "scale">("translate");
   const [isDragging, setIsDragging] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const meshRef = useRef<THREE.Mesh>(null);
   const searchParams = useSearchParams();
-  const fileName = searchParams.get("file");
+  const stlUrl = searchParams.get("file");
+  const patientId = searchParams.get("id");
+  const router = useRouter();
 
+  // Extract file name from URL
+  const fileName = stlUrl ? stlUrl.split("/").pop() : null;
+
+  // Load STL file from URL
   useEffect(() => {
-    if (!fileName) return;
-    const fetchAndParseSTL = async () => {
+    if (!stlUrl) return;
+    
+    const loadSTL = async () => {
       try {
-        // 1. Get signed URL from Supabase
-        const { data, error } = await supabase.storage
-          .from(process.env.NEXT_PUBLIC_BUCKET_NAME!)
-          .createSignedUrl(`/${fileName}`, 60);
-
-        if (error || !data?.signedUrl) {
-          alert("Could not get signed URL for file.");
-          return;
-        }
-        const signedUrl = data.signedUrl;
-
-        // 2. Fetch the file as a Blob
-        const response = await fetch(signedUrl);
+        const response = await fetch(stlUrl);
         if (!response.ok) {
           alert("Failed to fetch STL file: " + response.statusText);
           return;
         }
         const arrayBuffer = await response.arrayBuffer();
-
-        // 3. Parse as STL and set geometry
         const loader = new STLLoader();
         const geo = loader.parse(arrayBuffer);
         geo.computeVertexNormals();
         geo.computeBoundingBox();
-
         setGeometry(geo.clone());
       } catch (error) {
         console.error("Error loading STL file:", error);
         alert("Error loading STL file: " + (error as Error).message);
       }
     };
-    fetchAndParseSTL();
-  }, [fileName]);
+    
+    loadSTL();
+  }, [stlUrl]);
 
+  // TODO: Clean up this function
   const saveTransformedMesh = async () => {
     if (!meshRef.current || !fileName) {
       alert("No mesh to save or missing file name");
@@ -73,35 +67,45 @@ export default function PlaceOriginPage() {
     try {
       // Get the transformed geometry
       const transformedGeometry = meshRef.current.geometry.clone();
-      
+
       // Apply the mesh's world matrix to the geometry
       const matrix = meshRef.current.matrixWorld;
       transformedGeometry.applyMatrix4(matrix);
 
       // Export as STL
-      const { STLExporter } = await import("three/examples/jsm/exporters/STLExporter.js");
       const exporter = new STLExporter();
       const mesh = new THREE.Mesh(transformedGeometry);
       const stlString = exporter.parse(mesh);
 
       // Create blob and upload to Supabase
-      const blob = new Blob([stlString], { type: "application/sla" });
       const transformedFileName = `transformed_${fileName}`;
+      const file = new File([stlString], transformedFileName, { type: "application/sla" });
 
-      const { error } = await supabase.storage
-        .from(process.env.NEXT_PUBLIC_BUCKET_NAME!)
-        .upload(`/${transformedFileName}`, blob, {
-          contentType: "application/sla",
-          upsert: true,
-        });
+      // Upload the transformed mesh to Supabase
 
-      if (error) {
-        alert("Failed to save transformed mesh: " + error.message);
-      } else {
-        alert("Transformed mesh saved successfully!");
-        // Optionally redirect to cutting page with the transformed file
-        router.push(`/cut-mesh?file=${transformedFileName}`);
+      const filePath = `${patientId}/${file.name}`;
+      const response = await uploadToSupabase(file, filePath);
+
+      if (response.error) {
+        alert("Failed to upload transformed mesh: " + response.error.message);
+        return;
       }
+
+      // Fetch current models
+      const { data: patientData } = await supabase
+        .from("patients")
+        .select("models")
+        .eq("id", patientId)
+        .single();
+
+      // Merge new stl-transformed with public URL
+      const newModels = { ...patientData?.models, "stl-origin": stlUrl, "stl-transformed": response.publicUrl };
+      // Update patient record
+      await supabase
+        .from("patients")
+        .update({ models: newModels })
+        .eq("id", patientId);
+
     } catch (error) {
       console.error("Error saving transformed mesh:", error);
       alert("Error saving transformed mesh: " + (error as Error).message);
@@ -118,25 +122,22 @@ export default function PlaceOriginPage() {
           <div className="flex gap-2">
             <button
               onClick={() => setMode("translate")}
-              className={`px-3 py-1 rounded ${
-                mode === "translate" ? "bg-blue-500 text-white" : "bg-gray-200"
-              }`}
+              className={`px-3 py-1 rounded ${mode === "translate" ? "bg-blue-500 text-white" : "bg-gray-200"
+                }`}
             >
               Move
             </button>
             <button
               onClick={() => setMode("rotate")}
-              className={`px-3 py-1 rounded ${
-                mode === "rotate" ? "bg-blue-500 text-white" : "bg-gray-200"
-              }`}
+              className={`px-3 py-1 rounded ${mode === "rotate" ? "bg-blue-500 text-white" : "bg-gray-200"
+                }`}
             >
               Rotate
             </button>
             <button
               onClick={() => setMode("scale")}
-              className={`px-3 py-1 rounded ${
-                mode === "scale" ? "bg-blue-500 text-white" : "bg-gray-200"
-              }`}
+              className={`px-3 py-1 rounded ${mode === "scale" ? "bg-blue-500 text-white" : "bg-gray-200"
+                }`}
             >
               Scale
             </button>

@@ -1,8 +1,8 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
-import { Canvas, useLoader } from "@react-three/fiber";
+import { useSearchParams } from "next/navigation";
+import { Canvas } from "@react-three/fiber";
 import {
   OrbitControls,
   GizmoHelper,
@@ -14,18 +14,18 @@ import { supabase } from "@/lib/supabase";
 import * as THREE from "three";
 import { STLExporter } from "three/examples/jsm/Addons.js";
 import { uploadToSupabase } from "@/lib/filemanager";
-import { Suspense } from "react";
 
 export default function PlaceOriginPage() {
   const [geometry, setGeometry] = useState<THREE.BufferGeometry | null>(null);
-  const [mode, setMode] = useState<"translate" | "rotate" | "scale">("translate");
+  const [mode, setMode] = useState<"translate" | "rotate" | "scale">(
+    "translate"
+  );
   const [isDragging, setIsDragging] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const meshRef = useRef<THREE.Mesh>(null);
   const searchParams = useSearchParams();
   const stlUrl = searchParams.get("file");
   const patientId = searchParams.get("id");
-  const router = useRouter();
 
   // Extract file name from URL
   const fileName = stlUrl ? stlUrl.split("/").pop() : null;
@@ -33,7 +33,7 @@ export default function PlaceOriginPage() {
   // Load STL file from URL
   useEffect(() => {
     if (!stlUrl) return;
-    
+
     const loadSTL = async () => {
       try {
         const response = await fetch(stlUrl);
@@ -52,7 +52,7 @@ export default function PlaceOriginPage() {
         alert("Error loading STL file: " + (error as Error).message);
       }
     };
-    
+
     loadSTL();
   }, [stlUrl]);
 
@@ -79,7 +79,9 @@ export default function PlaceOriginPage() {
 
       // Create blob and upload to Supabase
       const transformedFileName = `transformed_${fileName}`;
-      const file = new File([stlString], transformedFileName, { type: "application/sla" });
+      const file = new File([stlString], transformedFileName, {
+        type: "application/sla",
+      });
 
       // Upload the transformed mesh to Supabase
 
@@ -99,13 +101,16 @@ export default function PlaceOriginPage() {
         .single();
 
       // Merge new stl-transformed with public URL
-      const newModels = { ...patientData?.models, "stl-origin": stlUrl, "stl-transformed": response.publicUrl };
+      const newModels = {
+        ...patientData?.models,
+        "stl-origin": stlUrl,
+        "stl-transformed": response.publicUrl,
+      };
       // Update patient record
       await supabase
         .from("patients")
         .update({ models: newModels })
         .eq("id", patientId);
-
     } catch (error) {
       console.error("Error saving transformed mesh:", error);
       alert("Error saving transformed mesh: " + (error as Error).message);
@@ -122,22 +127,25 @@ export default function PlaceOriginPage() {
           <div className="flex gap-2">
             <button
               onClick={() => setMode("translate")}
-              className={`px-3 py-1 rounded ${mode === "translate" ? "bg-blue-500 text-white" : "bg-gray-200"
-                }`}
+              className={`px-3 py-1 rounded ${
+                mode === "translate" ? "bg-blue-500 text-white" : "bg-gray-200"
+              }`}
             >
               Move
             </button>
             <button
               onClick={() => setMode("rotate")}
-              className={`px-3 py-1 rounded ${mode === "rotate" ? "bg-blue-500 text-white" : "bg-gray-200"
-                }`}
+              className={`px-3 py-1 rounded ${
+                mode === "rotate" ? "bg-blue-500 text-white" : "bg-gray-200"
+              }`}
             >
               Rotate
             </button>
             <button
               onClick={() => setMode("scale")}
-              className={`px-3 py-1 rounded ${mode === "scale" ? "bg-blue-500 text-white" : "bg-gray-200"
-                }`}
+              className={`px-3 py-1 rounded ${
+                mode === "scale" ? "bg-blue-500 text-white" : "bg-gray-200"
+              }`}
             >
               Scale
             </button>

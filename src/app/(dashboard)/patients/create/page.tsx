@@ -2,7 +2,7 @@
 
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, GizmoHelper, GizmoViewport } from "@react-three/drei";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import * as THREE from "three";
 import { uploadToSupabase } from "@/lib/filemanager";
@@ -10,14 +10,6 @@ import { supabase } from "@/lib/supabase";
 import { nanoid } from "nanoid";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 
 function STLMesh({ geometry }: { geometry: THREE.BufferGeometry | null }) {
   if (!geometry) return null;
@@ -36,12 +28,14 @@ const Page = () => {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   const onFileInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0] || null;
-    setFile(file);
-    if (!file || !file.name.endsWith(".stl")) {
+    const file = event.target.files?.[0];
+
+    if (!file || !file.name.toLowerCase().endsWith(".stl")) {
       alert("Please select a valid STL file");
       return;
     }
+    setFile(file);
+
     // parse the file
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -93,6 +87,11 @@ const Page = () => {
     }
   };
 
+  // TODO: Implement auto correction
+  const autoCorrection = async () => {
+    throw new Error("Not implemented");
+  };
+
   return (
     <div className="p-10">
       <h1 className="text-2xl font-bold mb-6">Create patient</h1>
@@ -129,6 +128,15 @@ const Page = () => {
           disabled={isSubmitting}
         >
           {isSubmitting ? "Saving..." : "Save STL & Patient"}
+        </Button>
+      </div>
+
+      <div className="flex justify-end">
+        <Button
+          className="bg-green-500 hover:bg-green-600"
+          onClick={autoCorrection}
+        >
+          Auto correction
         </Button>
       </div>
 

@@ -1,8 +1,8 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
-import { Canvas, useLoader } from "@react-three/fiber";
+import { useSearchParams } from "next/navigation";
+import { Canvas } from "@react-three/fiber";
 import {
   OrbitControls,
   GizmoHelper,
@@ -30,7 +30,7 @@ export default function PlaceOriginAndCutPage() {
   const searchParams = useSearchParams();
   const patientId = searchParams.get("id");
   const stlUrl = searchParams.get("file");
-  
+
   // Extract file name from URL
   const fileName = stlUrl ? stlUrl.split("/").pop() : null;
 
@@ -151,7 +151,9 @@ export default function PlaceOriginAndCutPage() {
       const mesh = new THREE.Mesh(meshRef.current.geometry.clone());
       const stlString = exporter.parse(mesh);
       const cutFileName = fileName ? `cut_${fileName}` : `cut_mesh}.stl`;
-      const file = new File([stlString], cutFileName, { type: "application/sla" });
+      const file = new File([stlString], cutFileName, {
+        type: "application/sla",
+      });
 
       // Upload to Supabase
       const filePath = `${patientId}/${file.name}`;
@@ -176,10 +178,14 @@ export default function PlaceOriginAndCutPage() {
 
       const { error: updateError } = await supabase
         .from("patients")
-        .update({ models: { ...patientData?.models, "stl-cut": response.publicUrl } })
+        .update({
+          models: { ...patientData?.models, "stl-cut": response.publicUrl },
+        })
         .eq("id", patientId);
       if (updateError) {
-        alert("Cut mesh saved, but failed to update patient: " + updateError.message);
+        alert(
+          "Cut mesh saved, but failed to update patient: " + updateError.message
+        );
       } else {
         alert("Cut mesh saved and patient updated successfully!");
       }
@@ -195,22 +201,25 @@ export default function PlaceOriginAndCutPage() {
           <div className="flex gap-2">
             <button
               onClick={() => setMode("translate")}
-              className={`px-3 py-1 rounded ${mode === "translate" ? "bg-blue-500 text-white" : "bg-gray-200"
-                }`}
+              className={`px-3 py-1 rounded ${
+                mode === "translate" ? "bg-blue-500 text-white" : "bg-gray-200"
+              }`}
             >
               Move
             </button>
             <button
               onClick={() => setMode("rotate")}
-              className={`px-3 py-1 rounded ${mode === "rotate" ? "bg-blue-500 text-white" : "bg-gray-200"
-                }`}
+              className={`px-3 py-1 rounded ${
+                mode === "rotate" ? "bg-blue-500 text-white" : "bg-gray-200"
+              }`}
             >
               Rotate
             </button>
             <button
               onClick={() => setMode("scale")}
-              className={`px-3 py-1 rounded ${mode === "scale" ? "bg-blue-500 text-white" : "bg-gray-200"
-                }`}
+              className={`px-3 py-1 rounded ${
+                mode === "scale" ? "bg-blue-500 text-white" : "bg-gray-200"
+              }`}
             >
               Scale
             </button>

@@ -8,9 +8,16 @@ import * as THREE from "three";
 import { uploadToSupabase } from "@/lib/filemanager";
 import { supabase } from "@/lib/supabase";
 import { nanoid } from "nanoid";
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 function STLMesh({ geometry }: { geometry: THREE.BufferGeometry | null }) {
   if (!geometry) return null;
@@ -88,7 +95,6 @@ const Page = () => {
 
   return (
     <div className="p-10">
-
       <h1 className="text-2xl font-bold mb-6">Create patient</h1>
 
       <div className="mb-4 flex gap-4">
@@ -96,14 +102,14 @@ const Page = () => {
           type="text"
           placeholder="Patient Name"
           value={patientName}
-          onChange={e => setPatientName(e.target.value)}
+          onChange={(e) => setPatientName(e.target.value)}
           className="border rounded px-2 py-1 w-48"
         />
         <Input
           type="number"
           placeholder="Age"
           value={patientAge}
-          onChange={e => setPatientAge(Number(e.target.value))}
+          onChange={(e) => setPatientAge(Number(e.target.value))}
           className="border rounded px-2 py-1 w-48"
           min={0}
         />
@@ -113,9 +119,7 @@ const Page = () => {
           accept=".stl"
           className="border rounded px-2 py-1 w-48"
         />
-
       </div>
-
 
       <div className="space-x-2">
         <Button
@@ -144,7 +148,6 @@ const Page = () => {
           </GizmoHelper>
         </Canvas>
       </div>
-
     </div>
   );
 };
